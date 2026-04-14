@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Keyboard Matrix Editor</title>
+<style>
+body { font-family: Arial; background:#111; color:white; }
+
+textarea {
+  width:100%; height:120px;
+  background:#222; color:#0f0;
+  font-family:monospace;
+}
+
+#container { display:flex; }
+
+#board {
+  position:relative;
+  width:70%;
+  height:600px;
+  background:#333;
+}
+
+#output {
+  width:30%;
+  padding:10px;
+  background:#000;
+  font-family:monospace;
+  white-space:pre;
+  overflow:auto;
+}
+
+.key {
+  position:absolute;
+  border:1px solid #999;
+  box-sizing:border-box;
+  text-align:center;
+  font-size:10px;
+  color:black;
+  background:#ddd;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.legend { font-weight:bold; }
+.small { font-size:9px; }
+</style>
+</head>
+
+<body>
+
+<h2>Keyboard Matrix Editor</h2>
+
+<b>Layout JSON</b>
+<textarea id="layout"></textarea>
+
+<b>Matrix Pins</b>
+<textarea id="pins">
+{
+  "cols": ["B10","B2","B1","B0","A3","A2","A1","A0","C15","C14","C13","B3","B4","B5","B6","B7"],
+  "rows": ["B12","B13","B14","B15","A8","A15"]
+}
+</textarea>
+
+<b>Keymap (KC_...)</b>
+<textarea id="keymap"></textarea>
+
+<button onclick="init()">Load</button>
+
+<div id="container">
+  <div id="board"></div>
+  <div id="output"></div>
+</div>
+
+<script>
+const unit = 50;
+let layout = [];
+let pins = {};
+let keymap = [];
+
+function parseKeymap(text) {
+  return text.replace(/\s+/g, "").split(",").filter(x => x);
+}
+
+function init() {
+  let layoutData = JSON.parse(document.getElementById("layout").value);
+  pins = JSON.parse(document.getElementById("pins").value);
+  keymap = parseKeymap(document.getElementById("keymap").value);
+
+  layout = layoutData.layouts
+    ? Object.values(layoutData.layouts)[0].layout
+    : layoutData.layout || layoutData;
+
+  render();
+}
+
+function render() {
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+
+  layout.forEach((k, i) => {
+    const row = k.matrix[0];
+    const col = k.matrix[1];
+
+    const key = document.createElement("div");
+    key.className = "key";
+
+    key.style.left = (k.x * unit) + "px";
+    key.style.top = (k.y * unit) + "px";
+    key.style.width = ((k.w || 1) * unit) + "px";
+    key.style.height = ((k.h || 1) * unit) + "px";
+
+    const kc = keymap[i] || "???";
+    const rowPin = pins.rows[row] || "ERR";
+    const colPin = pins.cols[col] || "ERR";
+
+    key.innerHTML = `
+      <div class="legend">${kc}</div>
+      <div class="small">[${row},${col}]</div>
+      <div class="small">${rowPin} | ${colPin}</div>
+    `;
+
+    key.onclick = () => editKey(i);
+
+    board.appendChild(key);
+  });
+
+  updateOutput();
+}
+
+function editKey(index) {
+  const current = layout[index].matrix.join(",");
+  let input = prompt("Enter row,col", current);
+
+  if (!input) return;
+
+  let parts = input.split(",");
+  if (parts.length !== 2) return alert("Invalid format");
+
+  let r = parseInt(parts[0]);
+  let c = parseInt(parts[1]);
+
+  if (isNaN(r) || isNaN(c)) return alert("Invalid numbers");
+
+  layout[index].matrix = [r, c];
+
+  render();
+}
+
+function updateOutput() {
+  let text = '{\n';
+  text += '  "layouts": {\n';
+  text += '    "LAYOUT_custom": {\n';
+  text += '      "layout": [\n';
+
+  layout.forEach((k, i) => {
+    let line = '        {"matrix": [' + k.matrix[0] + ', ' + k.matrix[1] + '], ';
+    line += '"x": ' + k.x + ', "y": ' + k.y;
+
+    if (k.w) line += ', "w": ' + k.w;
+    if (k.h) line += ', "h": ' + k.h;
+
+    line += '}';
+
+    if (i !== layout.length - 1) line += ',';
+
+    text += line + '\n';
+  });
+
+  text += '      ]\n';
+  text += '    }\n';
+  text += '  }\n';
+  text += '}';
+
+  document.getElementById("output").innerText = text;
+}
+</script>
+
+</body>
+</html>
